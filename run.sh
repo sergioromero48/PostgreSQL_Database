@@ -27,7 +27,7 @@ echo ""
 docker run --rm \
   --network host \
   $DEVICE_ARG \
-  "$IMAGE"bash
+  "$IMAGE"
 set -e
 
 IMAGE="esp32-dashboard"
