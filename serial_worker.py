@@ -29,27 +29,54 @@ def _parse_line(line: str):
     return precip, humidity, temp, level
 
 def _read_loop():
-    ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=1)
-    conn = get_conn()
-    cur  = conn.cursor()
+    try:
+        ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=1)
+        print(f"Successfully opened serial port: {SERIAL_PORT}")
+    except Exception as e:
+        print(f"Failed to open serial port {SERIAL_PORT}: {e}")
+        print("Serial worker will not read data, but app will continue...")
+        return
+    
+    try:
+        conn = get_conn()
+        cur  = conn.cursor()
+        print("Database connection established")
+    except Exception as e:
+        print(f"Failed to connect to database: {e}")
+        ser.close()
+        return
+    
     while True:
-        raw = ser.readline().decode(errors="ignore").strip()
-        if not raw:
-            time.sleep(SLEEP_SEC)
-            continue
         try:
-            p, h, t, lvl = _parse_line(raw)
-            cur.execute(
-                """INSERT INTO weatherDataFromSite1
-                   (PrecipInInches, HumidityInPercentage,
-                    TemperatureInFahrenheit, WaterLevel)
-                   VALUES (%s,%s,%s,%s)""",
-                (p, h, t, lvl)
-            )
-            conn.commit()
+            raw = ser.readline().decode(errors="ignore").strip()
+            if not raw:
+                time.sleep(SLEEP_SEC)
+                continue
+            try:
+                p, h, t, lvl = _parse_line(raw)
+                cur.execute(
+                    """INSERT INTO weatherDataFromSite1
+                       (PrecipInInches, HumidityInPercentage,
+                        TemperatureInFahrenheit, WaterLevel)
+                       VALUES (%s,%s,%s,%s)""",
+                    (p, h, t, lvl)
+                )
+                conn.commit()
+                print(f"Inserted data: {p}, {h}, {t}, {lvl}")
+            except Exception as e:
+                print("!!! insert failed:", e)
+            time.sleep(SLEEP_SEC)
+        except KeyboardInterrupt:
+            break
         except Exception as e:
-            print("!!! insert failed:", e)
-        time.sleep(SLEEP_SEC)
+            print(f"Serial read error: {e}")
+            time.sleep(SLEEP_SEC)
+    
+    try:
+        ser.close()
+        conn.close()
+    except:
+        pass
 
 def start_worker():
     t = threading.Thread(target=_read_loop, daemon=True)

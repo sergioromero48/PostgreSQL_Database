@@ -29,4 +29,5 @@ COPY . .
 EXPOSE 8501
 
 # default command
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.headless=true"]
+#CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
+CMD ["bash", "-c", "python health_check.py && streamlit run app.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true"]
