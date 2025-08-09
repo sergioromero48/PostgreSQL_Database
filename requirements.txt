@@ -1,6 +1,3 @@
-psycopg2==2.9.9
-cython
 numpy
-pandas
 pyserial
 streamlit

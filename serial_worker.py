@@ -5,79 +5,74 @@ Background thread that:
 3. Inserts the row into Postgres
 
 Import and call start_worker() once from app.py.
-"""
-import os, threading, time, serial, psycopg2
-from database import get_conn
+""" 
+# serial_worker.py
+import os, threading, time, serial, csv
+from datetime import datetime
+from pathlib import Path
 
 # ----------------- configuration -----------------
-SERIAL_PORT = os.getenv("SERIAL_PORT", "/dev/ttyUSB0")  # Jetson Nano UART
+SERIAL_PORT = os.getenv("SERIAL_PORT", "/dev/ttyUSB0")
 BAUDRATE    = int(os.getenv("BAUDRATE", "115200"))
 SLEEP_SEC   = 2
+CSV_PATH    = Path(os.getenv("CSV_PATH", "data.csv"))
 # --------------------------------------------------
 
 def _parse_line(line: str):
     """
-    ESP32 sends 7-char string like '50xxxx' (see original code) –
-    adapt this if your firmware changes.
-    Returns: (precip_in, humidity_pct, temp_F, water_level_txt)
+    Adapt this to your firmware payload.
+    Currently: returns (precip_in, humidity_str, temp_F_or_None, water_level_txt)
     """
-    precip = int(line[2:4]) / 10          # inches
-    humidity = f"{int(line[5:7]) / 10}%"  # 'nn.n%'
-    temp = None                           # ESP line had no temp; fill later
-    level_code = line[1]
-    level = {"0": "Low", "1": "Nominal", "2": "High"}.get(level_code, "Unknown")
+    # TODO: change this to your real format if different
+    precip = None
+    humidity = None
+    temp = None
+    level = line.strip() or "Unknown"
     return precip, humidity, temp, level
 
+def _ensure_csv():
+    if not CSV_PATH.exists():
+        with CSV_PATH.open("w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["EntryTime","PrecipInInches","HumidityInPercentage",
+                        "TemperatureInFahrenheit","WaterLevel"])
+
 def _read_loop():
+    _ensure_csv()
+
     try:
         ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=1)
-        print(f"Successfully opened serial port: {SERIAL_PORT}")
+        print(f"✅ Serial open: {SERIAL_PORT}")
     except Exception as e:
-        print(f"Failed to open serial port {SERIAL_PORT}: {e}")
-        print("Serial worker will not read data, but app will continue...")
+        print(f"❌ Serial open failed for {SERIAL_PORT}: {e}")
         return
-    
-    try:
-        conn = get_conn()
-        cur  = conn.cursor()
-        print("Database connection established")
-    except Exception as e:
-        print(f"Failed to connect to database: {e}")
-        ser.close()
-        return
-    
+
     while True:
         try:
             raw = ser.readline().decode(errors="ignore").strip()
             if not raw:
                 time.sleep(SLEEP_SEC)
                 continue
-            try:
-                p, h, t, lvl = _parse_line(raw)
-                cur.execute(
-                    """INSERT INTO weatherDataFromSite1
-                       (PrecipInInches, HumidityInPercentage,
-                        TemperatureInFahrenheit, WaterLevel)
-                       VALUES (%s,%s,%s,%s)""",
-                    (p, h, t, lvl)
-                )
-                conn.commit()
-                print(f"Inserted data: {p}, {h}, {t}, {lvl}")
-            except Exception as e:
-                print("!!! insert failed:", e)
+
+            p, h, t, lvl = _parse_line(raw)
+
+            # append a row
+            with CSV_PATH.open("a", newline="") as f:
+                w = csv.writer(f)
+                w.writerow([
+                    datetime.now().isoformat(timespec="seconds"),
+                    p, h, t, lvl
+                ])
+
+            print(f"➕ wrote row: {p}, {h}, {t}, {lvl}")
             time.sleep(SLEEP_SEC)
         except KeyboardInterrupt:
             break
         except Exception as e:
-            print(f"Serial read error: {e}")
+            print(f"⚠️ serial loop error: {e}")
             time.sleep(SLEEP_SEC)
-    
-    try:
-        ser.close()
-        conn.close()
-    except:
-        pass
 
 def start_worker():
     t = threading.Thread(target=_read_loop, daemon=True)
     t.start()
+

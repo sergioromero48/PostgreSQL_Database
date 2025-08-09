@@ -5,7 +5,7 @@ FROM --platform=arm64 python:3.10-slim
 # avoid buffering (so logs show up immediately)
 ENV PYTHONUNBUFFERED=1
 
-# install OS-level build deps for psycopg2 and Streamlit
+# install OS-level build deps for Streamlit
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       build-essential \
@@ -30,4 +30,4 @@ EXPOSE 8501
 
 # default command
 #CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
-CMD ["bash", "-c", "python health_check.py && streamlit run app.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true"]
+CMD ["bash", "-c", "streamlit run app.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true"]

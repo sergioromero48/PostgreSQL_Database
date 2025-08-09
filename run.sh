@@ -1,45 +1,46 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-IMAGE="esp32-dashboard"
-SERIAL="/dev/ttyUSB0"   # adjust if your Jetson Nano UART is different
+# ---- Config (override via env if you want) ----
+IMAGE="${IMAGE:-flood-monitoring}"
+SERIAL="${SERIAL:-/dev/ttyUSB0}"   # e.g. /dev/ttyUSB0 or /dev/ttyTHS1
+CSV_DIR="${CSV_DIR:-$PWD/data}"    # host folder to store CSV
+CSV_FILE="${CSV_FILE:-data.csv}"   # file name inside CSV_DIR
+PORT="${PORT:-8501}"
+# -----------------------------------------------
 
-echo "🔨 Building the Docker image..."
+echo "🔧 Building image: $IMAGE"
 docker build -t "$IMAGE" .
 
-echo "🔍 Checking if serial device exists..."
-if [ -e "$SERIAL" ]; then
-    echo "✅ Serial device $SERIAL found"
-    DEVICE_ARG="--device $SERIAL:$SERIAL"
-else
-    echo "⚠️  Serial device $SERIAL not found - continuing without it"
-    DEVICE_ARG=""
+echo "🔍 Checking serial device..."
+if [[ ! -e "$SERIAL" ]]; then
+  echo "❌ Serial device $SERIAL not found."
+  echo "   Hint: set SERIAL=/dev/ttyTHS1 (Jetson UART) or SERIAL=/dev/ttyUSB0 (USB)."
+  exit 1
 fi
+echo "✅ Serial device $SERIAL found"
+
+echo "📁 Preparing CSV directory: $CSV_DIR"
+mkdir -p "$CSV_DIR"
+# quick write test so we know the mount will be writable
+if ! ( : > "$CSV_DIR/$CSV_FILE" ); then
+  echo "❌ Cannot write to $CSV_DIR"
+  exit 1
+fi
+echo "✅ CSV path OK → $CSV_DIR/$CSV_FILE"
+echo "ℹ️  DB checks skipped (CSV mode)."
 
 echo "🚀 Starting the container..."
-echo "   - Streamlit will be available at: http://localhost:8501"
-echo "   - Using --network host for database connectivity"
-echo "   - Press Ctrl+C to stop"
-echo ""
+echo "   - Streamlit: http://localhost:$PORT"
+echo "   - Writing CSV to: $CSV_DIR/$CSV_FILE"
 
-# Run it, sharing the host's network so localhost→Postgres works
-# and passing the serial port through if it exists
-docker run --rm \
-  --network host \
-  $DEVICE_ARG \
-  "$IMAGE"
-set -e
-
-IMAGE="esp32-dashboard"
-SERIAL="/dev/ttyUSB0"   # adjust if your Jetson Nano UART is different
-
-# Build the image
-docker build -t "$IMAGE" .
-
-# Run it, sharing the host’s network so localhost→Postgres works
-# and passing the serial port through
-docker run --rm \
-  --network host \
+docker run -it \
+  --name esp32dash \
+  -p "$PORT:$PORT" \
   --device "$SERIAL:$SERIAL" \
+  -e "CSV_PATH=/app/data/$CSV_FILE" \
+  -e "SERIAL_PORT=$SERIAL" \
+  -e "BAUDRATE=115200" \
+  -v "$CSV_DIR:/app/data" \
   "$IMAGE"
 

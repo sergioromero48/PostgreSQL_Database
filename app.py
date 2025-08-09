@@ -1,48 +1,54 @@
+# app.py
+import os, csv
 import streamlit as st
-import pandas as pd
-from database import get_conn
+from pathlib import Path
 from serial_worker import start_worker
 
-st.set_page_config(page_title="ESP32 Weather", layout="wide")
+st.set_page_config(page_title="Flood Monitoring Dashboard", layout="wide")
 
-# Start the background worker with error handling
+CSV_PATH = Path(os.getenv("CSV_PATH", "data.csv"))
+
+# Kick off background serial→CSV writer
 try:
-    start_worker()                       # kick off background thread once
-    st.success("Background worker started successfully")
+    start_worker()
+    st.success("Background worker started")
 except Exception as e:
-    st.warning(f"Background worker failed to start: {e}")
+    st.warning(f"Worker failed to start: {e}")
 
-st.title("📡 ESP32 Weather Dashboard")
+st.title("📡 Flood Monitoring")
+st.write(f"CSV file: `{CSV_PATH}`")
 
-with st.spinner("Loading latest data…"):
-    try:
-        conn = get_conn()
-        df = pd.read_sql(
-            "SELECT * FROM weatherDataFromSite1 "
-            "ORDER BY EntryTime DESC LIMIT 100", conn
-        )
-        conn.close()
-    except Exception as e:
-        st.error(f"Database connection failed: {e}")
-        st.info("Please check your database configuration and ensure the database is running.")
-        st.stop()
+def read_last_rows(path: Path, n: int = 100):
+    """Return last n data rows as list[dict]. Works without pandas."""
+    if not path.exists() or path.stat().st_size == 0:
+        return []
+    with path.open("r", encoding="utf-8", errors="ignore") as f:
+        lines = f.readlines()
+    if not lines:
+        return []
+    header = [h.strip() for h in lines[0].strip().split(",")]
+    rows = []
+    for line in lines[1:][-n:]:
+        parts = [p.strip() for p in line.strip().split(",")]
+        if len(parts) != len(header):
+            continue
+        rows.append(dict(zip(header, parts)))
+    return rows
 
-if df.empty:
-    st.info("Waiting for first packets…")
-    st.stop()
+rows = read_last_rows(CSV_PATH, 100)
+if not rows:
+    st.info("No data yet… waiting on ESP32.")
+else:
+    # quick HTML table (no pandas needed)
+    header = list(rows[0].keys())
+    html = ["<table><thead><tr>"]
+    html += [f"<th>{h}</th>" for h in header]
+    html += ["</tr></thead><tbody>"]
+    # show newest first
+    for r in reversed(rows[-50:]):
+        html += ["<tr>"] + [f"<td>{r.get(h,'')}</td>" for h in header] + ["</tr>"]
+    html += ["</tbody></table>"]
+    st.markdown("".join(html), unsafe_allow_html=True)
 
-# ---- UI ----
-col1, col2 = st.columns(2)
+st.caption("Tip: Click the ↻ rerun button in the top-right to refresh.")
 
-with col1:
-    st.subheader("Raw table")
-    st.dataframe(df, use_container_width=True)
-
-with col2:
-    st.subheader("Water-level trend")
-    st.line_chart(
-        df.set_index("EntryTime")["WaterLevel"]
-          .replace({"Low":0,"Nominal":1,"High":2})
-    )
-
-st.caption("Auto-refresh with the ↻ button in the toolbar.")
