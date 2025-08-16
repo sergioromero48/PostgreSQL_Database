@@ -1,47 +1,46 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ---- Config you can override via env ----
-IMAGE="${IMAGE:-esp32-dashboard}"
+# ---- Config (override via env if you want) ----
+IMAGE="${IMAGE:-flood-monitoring}"
+SERIAL="${SERIAL:-/dev/ttyUSB0}"   # e.g. /dev/ttyUSB0 or /dev/ttyTHS1
+CSV_DIR="${CSV_DIR:-$PWD/data}"    # host folder to store CSV
+CSV_FILE="${CSV_FILE:-data.csv}"   # file name inside CSV_DIR
 PORT="${PORT:-8501}"
-SERIAL="${SERIAL:-/dev/ttyUSB0}"
-CSV_DIR="${CSV_DIR:-$PWD/data}"
-CSV_FILE="${CSV_FILE:-data.csv}"
-# ----------------------------------------
+# -----------------------------------------------
 
-echo "🔨 Building the Docker image: $IMAGE"
+echo "🔧 Building image: $IMAGE"
 docker build -t "$IMAGE" .
 
-# Ensure the CSV dir exists and the file has a header
+echo "🔍 Checking serial device..."
+if [[ ! -e "$SERIAL" ]]; then
+  echo "❌ Serial device $SERIAL not found."
+  echo "   Hint: set SERIAL=/dev/ttyTHS1 (Jetson UART) or SERIAL=/dev/ttyUSB0 (USB)."
+  exit 1
+fi
+echo "✅ Serial device $SERIAL found"
+
+echo "📁 Preparing CSV directory: $CSV_DIR"
 mkdir -p "$CSV_DIR"
-CSV_PATH="$CSV_DIR/$CSV_FILE"
-if [ ! -s "$CSV_PATH" ]; then
-  echo "EntryTime,PrecipInInches,HumidityInPercentage,TemperatureInFahrenheit,WaterLevel" > "$CSV_PATH"
-  echo "📝 Wrote CSV header to $CSV_PATH"
+# quick write test so we know the mount will be writable
+if ! ( : > "$CSV_DIR/$CSV_FILE" ); then
+  echo "❌ Cannot write to $CSV_DIR"
+  exit 1
 fi
+echo "✅ CSV path OK → $CSV_DIR/$CSV_FILE"
+echo "ℹ️  DB checks skipped (CSV mode)."
 
-# Only pass the serial device if it's present
-DEVICE_ARG=()
-if [ -e "$SERIAL" ]; then
-  echo "✅ Serial device found: $SERIAL"
-  DEVICE_ARG=(--device "$SERIAL:$SERIAL")
-else
-  echo "⚠️  Serial device $SERIAL not found — running without it"
-fi
+echo "🚀 Starting the container..."
+echo "   - Streamlit: http://localhost:$PORT"
+echo "   - Writing CSV to: $CSV_DIR/$CSV_FILE"
 
-# Clean any old container
-docker rm -f esp32dash >/dev/null 2>&1 || true
-
-# Run container; mount data dir; expose port; set envs; force a good entrypoint
-docker run -d --name esp32dash \
-  -p "$PORT:8501" \
-  -v "$CSV_DIR:/app/data" \
+docker run -it \
+  --name esp32dash \
+  -p "$PORT:$PORT" \
+  --device "$SERIAL:$SERIAL" \
   -e "CSV_PATH=/app/data/$CSV_FILE" \
   -e "SERIAL_PORT=$SERIAL" \
   -e "BAUDRATE=115200" \
-  "${DEVICE_ARG[@]}" \
-  --entrypoint bash \
-  "$IMAGE" -lc 'streamlit run app.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true'
-
-echo "🚀 Up at http://localhost:$PORT"
+  -v "$CSV_DIR:/app/data" \
+  "$IMAGE"
 
