@@ -65,18 +65,19 @@ with st.sidebar:
 
 # ---------------- Data load ----------------
 with st.spinner("Loading data…"):
-    if not CSV_PATH.exists():
-        st.info("No data yet… waiting on ESP32.")
+    if not CSV_PATH.exists() or CSV_PATH.stat().st_size == 0:
+        st.info("No data yet… waiting on ESP32 to write the first row.")
         st.stop()
     try:
         df = pd.read_csv(CSV_PATH)
+        if df.empty or df.columns.size == 0:
+            st.info("CSV is present but empty. Waiting for first sensor write…")
+            st.stop()
     except Exception as e:
-        st.error(f"Failed to read {CSV_PATH}: {e}")
+        # Handle the classic: pandas.errors.EmptyDataError: No columns to parse from file
+        st.info(f"CSV not ready ({type(e).__name__}). Waiting for first sensor write…")
         st.stop()
 
-if df.empty:
-    st.info("No rows yet…")
-    st.stop()
 
 # Normalize columns & types
 def _ensure_col(name): return name in df.columns
