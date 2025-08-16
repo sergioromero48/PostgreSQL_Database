@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-
 # ---- Config (override via env if you want) ----
 IMAGE="${IMAGE:-flood-monitoring}"
 SERIAL="${SERIAL:-/dev/ttyUSB0}"   # e.g. /dev/ttyUSB0 or /dev/ttyTHS1
@@ -9,12 +8,6 @@ CSV_DIR="${CSV_DIR:-$PWD/data}"    # host folder to store CSV
 CSV_FILE="${CSV_FILE:-data.csv}"   # file name inside CSV_DIR
 PORT="${PORT:-8501}"
 # -----------------------------------------------
-
-# --- API ---
-OPENWEATHER_API_KEY="b512ece5d83613e319c1c55a2055f5be" \
-export DEFAULT_LAT=27.7742
-export DEFAULT_LON=-97.5128
-
 
 echo "🔧 Building image: $IMAGE"
 docker build -t "$IMAGE" .
@@ -48,7 +41,6 @@ docker run -it \
   -e "CSV_PATH=/app/data/$CSV_FILE" \
   -e "SERIAL_PORT=$SERIAL" \
   -e "BAUDRATE=115200" \
-  -e "OPENWEATHER_API_KEY=$OPENWEATHER_API_KEY"\
   -v "$CSV_DIR:/app/data" \
   "$IMAGE"
 
