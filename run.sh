@@ -12,6 +12,9 @@ PORT="${PORT:-8501}"
 
 # --- API ---
 OPENWEATHER_API_KEY="b512ece5d83613e319c1c55a2055f5be" \
+export DEFAULT_LAT=27.7742
+export DEFAULT_LON=-97.5128
+
 
 echo "🔧 Building image: $IMAGE"
 docker build -t "$IMAGE" .
