@@ -3,7 +3,7 @@
 Real-time sensor dashboard (Streamlit + Plotly) that ingests serial data from an MCU (e.g. ESP32) and stores every reading to a CSV file for plotting (Temperature, Humidity, Light, Precipitation, Water Level). Optional live weather overlay via OpenWeather and map via Folium.
 
 ---
-> ⚠️ Windows notes: The Windows / TCP bridge workflow has not been fully end-to-end tested yet. Core logic is cross-platform, but direct COM passthrough limitations in Docker Desktop mean you should treat the Windows instructions as experimental. Prefer running inside WSL when possible and report issues you encounter.
+> ⚠️ Windows notes: The Windows / TCP bridge workflow has not been fully end-to-end tested yet. Core logic is cross-platform, but direct COM passthrough limitations in Docker Desktop mean you should treat the Windows instructions as experimental. Prefer running inside WSL or (recommended) run the app **without Docker** on Windows and let it access the serial port directly. Report any issues you encounter.
 
 ## 1. Features
 - Auto‑starting background worker (`serial_worker.py`) that reads serial or a TCP serial bridge.
@@ -73,8 +73,9 @@ DATA,24.7,51.2,22340,0,Nominal
 2. Plug in your MCU (e.g. appears as `/dev/ttyUSB0`).
 3. Run:
    ```bash
-   ./run.sh
+   sudo ./run.sh
    ```
+   (If your user is in the `docker` group you can omit `sudo`.)
 4. Open: http://localhost:8501
 5. Stop container: `docker rm -f floodDash`
 
@@ -209,7 +210,7 @@ Add your preferred license here (MIT, Apache-2.0, etc.).
 ## 14. Quick Command Reference
 | Action | Command |
 |--------|---------|
-| Build & run (Linux) | `./run.sh` |
+| Build & run (Linux) | `sudo ./run.sh` |
 | Build & run (Win PowerShell) | `./run_windows.ps1` |
 | Override serial (Linux) | `SERIAL=/dev/ttyUSB1 ./run.sh` |
 | Use TCP bridge (Windows) | `$env:SERIAL_TCP='localhost:7777'; ./run_windows.ps1` |
