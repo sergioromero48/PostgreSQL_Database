@@ -9,6 +9,12 @@ CSV_FILE="${CSV_FILE:-data.csv}"   # file name inside CSV_DIR
 PORT="${PORT:-8501}"
 # -----------------------------------------------
 
+export OPENWEATHER_API_KEY="1e9b1550861b51e90de8f1b39b3b870c"
+export DEFAULT_LAT="29.58145"
+export DEFAULT_LON="-98.616441"
+
+docker rm -f floodDash >/dev/null 2>&1 || true
+
 echo "🔧 Building image: $IMAGE"
 docker build -t "$IMAGE" .
 
@@ -35,9 +41,12 @@ echo "   - Streamlit: http://localhost:$PORT"
 echo "   - Writing CSV to: $CSV_DIR/$CSV_FILE"
 
 docker run -it \
-  --name esp32dash \
+  --name floodDash \
   -p "$PORT:$PORT" \
   --device "$SERIAL:$SERIAL" \
+  -e "OPENWEATHER_API_KEY=$OPENWEATHER_API_KEY" \
+  -e "DEFAULT_LAT=$DEFAULT_LAT" \
+  -e "DEFAULT_LON=$DEFAULT_LON" \
   -e "CSV_PATH=/app/data/$CSV_FILE" \
   -e "SERIAL_PORT=$SERIAL" \
   -e "BAUDRATE=115200" \

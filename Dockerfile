@@ -1,6 +1,6 @@
 # Database/Dockerfile
 # Use Python 3.10 slim (multi-arch: arm64 & amd64)
-FROM --platform=arm64 python:3.10-slim
+FROM --platform=amd64 python:3.10-slim
 
 # avoid buffering (so logs show up immediately)
 ENV PYTHONUNBUFFERED=1
